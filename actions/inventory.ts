@@ -4,18 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { inventorySchema, type InventoryFormValues } from '@/lib/validations/inventory'
 import { auditLog } from '@/lib/utils/hipaa-audit'
-
-async function getPharmacyId(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pharmacy_id')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.pharmacy_id) throw new Error('No pharmacy assigned')
-  return profile.pharmacy_id
-}
+import { getProfileContext } from '@/lib/supabase/get-profile'
 
 export async function receiveStock(data: InventoryFormValues) {
   const parsed = inventorySchema.safeParse(data)
@@ -23,8 +12,8 @@ export async function receiveStock(data: InventoryFormValues) {
     return { error: parsed.error.flatten().fieldErrors }
   }
 
+  const { pharmacyId } = await getProfileContext()
   const supabase = await createClient()
-  const pharmacyId = await getPharmacyId(supabase)
 
   const { data: item, error } = await supabase
     .from('inventory')
@@ -40,8 +29,8 @@ export async function receiveStock(data: InventoryFormValues) {
 }
 
 export async function adjustStock(inventoryId: string, quantity: number, reason: string) {
+  await getProfileContext()
   const supabase = await createClient()
-  await getPharmacyId(supabase)
 
   const { data: current } = await supabase
     .from('inventory')
@@ -80,8 +69,8 @@ export async function updateReorderPoint(
   reorderPoint: number,
   reorderQuantity: number
 ) {
+  await getProfileContext()
   const supabase = await createClient()
-  await getPharmacyId(supabase)
 
   const { data, error } = await supabase
     .from('inventory')
@@ -96,8 +85,8 @@ export async function updateReorderPoint(
 }
 
 export async function markExpired(inventoryId: string) {
+  const { pharmacyId } = await getProfileContext()
   const supabase = await createClient()
-  const pharmacyId = await getPharmacyId(supabase)
 
   const { data: item } = await supabase
     .from('inventory')
@@ -114,7 +103,6 @@ export async function markExpired(inventoryId: string) {
 
   if (error) return { error: error.message }
 
-  // Create alert
   const medName = (item.medications as { name: string } | null)?.name ?? 'Unknown'
   await supabase.from('alerts').insert({
     pharmacy_id: pharmacyId,

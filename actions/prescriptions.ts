@@ -5,19 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { prescriptionSchema, type PrescriptionFormValues } from '@/lib/validations/prescription'
 import { auditLog } from '@/lib/utils/hipaa-audit'
 import { canTransition } from '@/lib/utils/prescription-state-machine'
-import type { PrescriptionStatus, UserRole } from '@/lib/supabase/types'
-
-async function getCurrentUser(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pharmacy_id, role')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.pharmacy_id) throw new Error('No pharmacy assigned')
-  return { pharmacyId: profile.pharmacy_id, role: profile.role as UserRole, userId: user.id }
-}
+import type { PrescriptionStatus } from '@/lib/supabase/types'
+import { getProfileContext } from '@/lib/supabase/get-profile'
 
 export async function createPrescription(data: PrescriptionFormValues) {
   const parsed = prescriptionSchema.safeParse(data)
@@ -25,8 +14,8 @@ export async function createPrescription(data: PrescriptionFormValues) {
     return { error: parsed.error.flatten().fieldErrors }
   }
 
+  const { pharmacyId } = await getProfileContext()
   const supabase = await createClient()
-  const { pharmacyId } = await getCurrentUser(supabase)
 
   const { data: prescription, error } = await supabase
     .from('prescriptions')
@@ -46,8 +35,8 @@ export async function updatePrescriptionStatus(
   newStatus: PrescriptionStatus,
   notes?: string
 ) {
+  const { role, userId } = await getProfileContext()
   const supabase = await createClient()
-  const { role, userId } = await getCurrentUser(supabase)
 
   const { data: current } = await supabase
     .from('prescriptions')
@@ -86,8 +75,8 @@ export async function updatePrescriptionStatus(
 }
 
 export async function createRefill(prescriptionId: string) {
+  const { userId } = await getProfileContext()
   const supabase = await createClient()
-  const { userId } = await getCurrentUser(supabase)
 
   const { data: rx } = await supabase
     .from('prescriptions')

@@ -14,7 +14,7 @@ export type DrugSchedule = 'OTC' | 'II' | 'III' | 'IV' | 'V'
 export type TransactionType = 'sale' | 'refund' | 'void' | 'adjustment'
 export type AlertType = 'low_stock' | 'expiration' | 'drug_interaction' | 'refill_due' | 'claim_rejected' | 'system'
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       pharmacies: {
@@ -486,6 +486,9 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['push_subscriptions']['Insert']>
       }
     }
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
       get_my_pharmacy_id: { Args: Record<never, never>; Returns: string }
       get_my_role: { Args: Record<never, never>; Returns: UserRole }
@@ -493,6 +496,18 @@ export interface Database {
       get_dashboard_stats: { Args: { p_pharmacy_id: string }; Returns: Json }
       can_refill: { Args: { prescription_uuid: string }; Returns: Json }
       check_low_stock: { Args: Record<never, never>; Returns: void }
+    }
+    Enums: {
+      user_role: 'super_admin' | 'pharmacy_admin' | 'pharmacist' | 'technician' | 'cashier' | 'viewer'
+      prescription_status: 'received' | 'verified' | 'on_hold' | 'filling' | 'quality_check' | 'ready' | 'dispensed' | 'cancelled' | 'transferred'
+      claim_status: 'pending' | 'submitted' | 'adjudicated' | 'paid' | 'rejected' | 'appealed'
+      inventory_status: 'active' | 'low_stock' | 'out_of_stock' | 'expired' | 'discontinued'
+      drug_schedule: 'OTC' | 'II' | 'III' | 'IV' | 'V'
+      transaction_type: 'sale' | 'refund' | 'void' | 'adjustment'
+      alert_type: 'low_stock' | 'expiration' | 'drug_interaction' | 'refill_due' | 'claim_rejected' | 'system'
+    }
+    CompositeTypes: {
+      [_ in never]: never
     }
   }
 }

@@ -4,18 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { patientSchema, patientUpdateSchema, type PatientFormValues } from '@/lib/validations/patient'
 import { auditLog } from '@/lib/utils/hipaa-audit'
-
-async function getPharmacyId(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pharmacy_id, role')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.pharmacy_id) throw new Error('No pharmacy assigned')
-  return { pharmacyId: profile.pharmacy_id, role: profile.role, userId: user.id }
-}
+import { getProfileContext } from '@/lib/supabase/get-profile'
 
 export async function createPatient(data: PatientFormValues) {
   const parsed = patientSchema.safeParse(data)
@@ -23,8 +12,8 @@ export async function createPatient(data: PatientFormValues) {
     return { error: parsed.error.flatten().fieldErrors }
   }
 
+  const { pharmacyId } = await getProfileContext()
   const supabase = await createClient()
-  const { pharmacyId } = await getPharmacyId(supabase)
 
   const { data: patient, error } = await supabase
     .from('patients')
@@ -45,8 +34,8 @@ export async function updatePatient(id: string, data: Partial<PatientFormValues>
     return { error: parsed.error.flatten().fieldErrors }
   }
 
+  await getProfileContext()
   const supabase = await createClient()
-  await getPharmacyId(supabase)
 
   const { data: oldPatient } = await supabase
     .from('patients')
@@ -70,8 +59,8 @@ export async function updatePatient(id: string, data: Partial<PatientFormValues>
 }
 
 export async function deletePatient(id: string) {
+  await getProfileContext()
   const supabase = await createClient()
-  await getPharmacyId(supabase)
 
   const { data: oldPatient } = await supabase.from('patients').select('*').eq('id', id).single()
 
@@ -88,8 +77,8 @@ export async function deletePatient(id: string) {
 }
 
 export async function searchPatients(query: string) {
+  const { pharmacyId } = await getProfileContext()
   const supabase = await createClient()
-  const { pharmacyId } = await getPharmacyId(supabase)
 
   const { data, error } = await supabase
     .from('patients')
@@ -117,7 +106,6 @@ export async function addInsurancePlan(patientId: string, data: {
 }) {
   const supabase = await createClient()
 
-  // If setting as primary, unset other primary plans
   if (data.is_primary) {
     await supabase
       .from('insurance_plans')
