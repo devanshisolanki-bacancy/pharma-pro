@@ -62,23 +62,34 @@ export function useRealtimePrescriptions(pharmacyId: string | null) {
   return prescriptions
 }
 
+// Shape the static demo alerts to match AlertRow so the dropdown can render them.
+const DEMO_ALERTS: AlertRow[] = demoDashboard.alerts.map((a, i) => ({
+  id: a.id,
+  pharmacy_id: '11111111-1111-1111-1111-111111111111',
+  type: a.type as AlertRow['type'],
+  title: a.title,
+  message: a.message ?? null,
+  reference_id: null,
+  reference_type: null,
+  is_read: false,
+  is_dismissed: false,
+  created_at: new Date(Date.now() - i * 60_000).toISOString(),
+}))
+
 export function useRealtimeAlerts(pharmacyId: string | null) {
   const demoEnabled = isDemoMode()
   const [unreadCount, setUnreadCount] = useState(
     demoEnabled ? demoDashboard.unreadAlerts : 0
   )
-  const [alerts, setAlerts] = useState<AlertRow[]>([])
+  const [alerts, setAlerts] = useState<AlertRow[]>(demoEnabled ? DEMO_ALERTS : [])
 
   useEffect(() => {
-    if (demoEnabled) {
-      return
-    }
-
+    if (demoEnabled) return
     if (!pharmacyId) return
 
     const supabase = createClient()
 
-    // Initial fetch
+    // Initial fetch of unread, non-dismissed alerts
     supabase
       .from('alerts')
       .select('*')
@@ -118,7 +129,9 @@ export function useRealtimeAlerts(pharmacyId: string | null) {
         },
         (payload) => {
           const updated = payload.new as AlertRow
-          setAlerts(prev => prev.map(a => a.id === updated.id ? updated : a).filter(a => !a.is_dismissed))
+          setAlerts(prev =>
+            prev.map(a => a.id === updated.id ? updated : a).filter(a => !a.is_dismissed)
+          )
           setUnreadCount(prev => updated.is_read ? Math.max(0, prev - 1) : prev)
         }
       )
@@ -129,5 +142,27 @@ export function useRealtimeAlerts(pharmacyId: string | null) {
     }
   }, [demoEnabled, pharmacyId])
 
-  return { alerts, unreadCount }
+  async function markAsRead(alertId: string) {
+    setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, is_read: true } : a))
+    setUnreadCount(prev => Math.max(0, prev - 1))
+
+    if (demoEnabled || !pharmacyId) return
+    const supabase = createClient()
+    await supabase.from('alerts').update({ is_read: true }).eq('id', alertId)
+  }
+
+  async function markAllAsRead() {
+    setAlerts(prev => prev.map(a => ({ ...a, is_read: true })))
+    setUnreadCount(0)
+
+    if (demoEnabled || !pharmacyId) return
+    const supabase = createClient()
+    await supabase
+      .from('alerts')
+      .update({ is_read: true })
+      .eq('pharmacy_id', pharmacyId)
+      .eq('is_read', false)
+  }
+
+  return { alerts, unreadCount, markAsRead, markAllAsRead }
 }

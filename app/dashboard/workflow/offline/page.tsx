@@ -1,12 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatRelativeTime } from '@/lib/utils/formatters'
 import { WifiOff } from 'lucide-react'
+
+const EMPTY_SNAPSHOT = {
+  updatedAt: null as string | null,
+  prescriptions: [] as OfflinePrescription[],
+}
 
 type OfflinePrescription = {
   id: string
@@ -18,29 +23,28 @@ type OfflinePrescription = {
 }
 
 export default function OfflineWorkflowPage() {
-  const [snapshot] = useState(() => {
-    if (typeof window === 'undefined') {
-      return { updatedAt: null as string | null, prescriptions: [] as OfflinePrescription[] }
-    }
+  // Start with empty state on both server and client so the initial render
+  // matches. localStorage is only available in the browser, so reading it
+  // inside useState would produce a server/client mismatch (hydration error).
+  const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT)
 
+  useEffect(() => {
     const raw = localStorage.getItem('workflow_offline_queue')
-    if (!raw) {
-      return { updatedAt: null as string | null, prescriptions: [] as OfflinePrescription[] }
-    }
+    if (!raw) return
 
     try {
       const parsed = JSON.parse(raw) as {
         updatedAt?: string
         prescriptions?: OfflinePrescription[]
       }
-      return {
+      setSnapshot({
         updatedAt: parsed.updatedAt ?? null,
         prescriptions: parsed.prescriptions ?? [],
-      }
+      })
     } catch {
-      return { updatedAt: null as string | null, prescriptions: [] as OfflinePrescription[] }
+      // Ignore corrupted cache entries.
     }
-  })
+  }, [])
 
   const updatedAt = snapshot.updatedAt
   const prescriptions = snapshot.prescriptions

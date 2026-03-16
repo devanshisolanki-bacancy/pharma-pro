@@ -12,15 +12,19 @@ function base64ToUint8Array(base64String: string) {
 }
 
 export function usePushNotifications() {
-  const [permission, setPermission] = useState<PermissionState>(
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
-  )
+  // Start with a consistent initial value on both server and client to avoid
+  // the hydration mismatch that occurs when useState reads browser APIs
+  // (Notification.permission) which are undefined during SSR.
+  const [permission, setPermission] = useState<PermissionState>('default')
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission)
+    if (typeof window === 'undefined') return
+    if (!('Notification' in window)) {
+      setPermission('unsupported')
+      return
     }
+    setPermission(Notification.permission)
   }, [])
 
   async function subscribe() {
